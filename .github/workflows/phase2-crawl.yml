@@ -1,0 +1,25 @@
+name: phase2-crawl
+on:
+  push:
+    paths:
+      - '.github/workflows/phase2-crawl.yml'
+      - 'phase2_wikipedia_crawl.py'
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Crawl Wikimedia category frame
+        run: python phase2_wikipedia_crawl.py
+      - name: Upload crawl dataset
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-sf-novels
+          path: phase2_sf_novels.json
+          retention-days: 1
