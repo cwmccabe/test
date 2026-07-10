@@ -14,13 +14,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install wikitext parser
-        run: python -m pip install --quiet mwparserfromhell
-      - name: Retrieve retained-candidate metadata
+      - name: Install crawl dependencies
+        run: python -m pip install --quiet mwparserfromhell pandas lxml html5lib beautifulsoup4
+      - name: Crawl science-fiction short-fiction frame
         run: python phase2_wikipedia_crawl.py
-      - name: Upload candidate metadata
+      - name: Upload short-fiction crawl
         uses: actions/upload-artifact@v4
         with:
-          name: phase2-candidate-metadata
-          path: phase2_candidate_metadata.json
+          name: phase2-sf-short-fiction
+          path: phase2_sf_short_fiction.json
           retention-days: 1
