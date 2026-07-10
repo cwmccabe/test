@@ -8,6 +8,9 @@ on:
     types: [opened]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   crawl:
     runs-on: ubuntu-latest
@@ -19,9 +22,10 @@ jobs:
           python-version: '3.12'
       - name: Crawl Wikimedia category frame
         run: python phase2_wikipedia_crawl.py
-      - name: Upload crawl dataset
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase2-sf-novels
-          path: phase2_sf_novels.json
-          retention-days: 1
+      - name: Commit crawl dataset
+        run: |
+          git config user.name "phase2-crawl-bot"
+          git config user.email "cwmccabe.ai@gmail.com"
+          git add phase2_sf_novels.json
+          git commit -m "Temporary Phase II crawl dataset" || exit 0
+          git push
