@@ -19,10 +19,6 @@ def api(params,retries=6):
             if a+1==retries: raise
             time.sleep(min(30,2**a))
 
-def fetch_url(url):
-    req=urllib.request.Request(url,headers={'User-Agent':UA})
-    with urllib.request.urlopen(req,timeout=120) as r:return r.read()
-
 def category_members():
     items=[]; cont={}
     while True:
@@ -32,23 +28,25 @@ def category_members():
         cont=d['continue']
 
 def parse_list_rows():
-    url='https://en.wikipedia.org/wiki/'+LIST_PAGE.replace(' ','_')
-    soup=BeautifulSoup(fetch_url(url),'html.parser')
+    parsed=api({'action':'parse','page':LIST_PAGE,'prop':'text'})
+    soup=BeautifulSoup(parsed['parse']['text'],'html.parser')
     rows=[]; table_count=0
     for ti,table in enumerate(soup.select('table.wikitable')):
-        headers=[th.get_text(' ',strip=True).lower() for th in table.select('tr')[0].find_all(['th','td'])]
+        trs=table.select('tr')
+        if not trs: continue
+        headers=[th.get_text(' ',strip=True).lower() for th in trs[0].find_all(['th','td'])]
         title_i=next((i for i,h in enumerate(headers) if 'title' in h or h=='story'),None)
         author_i=next((i for i,h in enumerate(headers) if 'author' in h or 'writer' in h),None)
         year_i=next((i for i,h in enumerate(headers) if 'year' in h or 'date' in h),None)
         if title_i is None: continue
         table_count+=1
-        for ri,tr in enumerate(table.select('tr')[1:]):
+        for ri,tr in enumerate(trs[1:]):
             cells=tr.find_all(['td','th'])
             if title_i>=len(cells): continue
             cell=cells[title_i]
-            link=next((a for a in cell.find_all('a',href=True) if (a['href'].startswith('/wiki/') or a['href'].startswith('./')) and 'File:' not in a['href']),None)
+            link=next((a for a in cell.find_all('a',href=True) if a['href'].startswith('/wiki/') and 'File:' not in a['href']),None)
             if not link: continue
-            href=link['href']; raw=href.split('/wiki/',1)[1] if '/wiki/' in href else href[2:]
+            raw=link['href'].split('/wiki/',1)[1]
             listed_title=urllib.parse.unquote(raw.split('#',1)[0]).replace('_',' ')
             author=cells[author_i].get_text(' ',strip=True) if author_i is not None and author_i<len(cells) else ''
             year=cells[year_i].get_text(' ',strip=True) if year_i is not None and year_i<len(cells) else ''
