@@ -1,11 +1,17 @@
-import json,time,urllib.parse,urllib.request
+import io,json,time,urllib.parse,urllib.request
+from collections import defaultdict
+import pandas as pd
 import mwparserfromhell
-API='https://en.wikipedia.org/w/api.php'; UA='AgenticAIRiskLiteratureReview/1.0 (research crawl; cwmccabe.ai@gmail.com)'
-PAGEIDS=[36218,36390851,496941,55503282,8894063,33455920,2080,4792251,2646076,55206552,61112100,74806362,68339911,33778980,23281,55645261,2465029,408735,2233223,16039594,71480,1456993,7575811,56994349,53750390,3261311,39673791,370203,55289127,79873171,4579565,41476698,48083752,19357206,1813784,47079989,55805386,3890107,65652336,47580669,74579274,1048130,3452658,77652217,1858057,39516319,63440967,23970532,4082,4081,1789029,1720972,12690765,44449,1963048,31009850,63896277,3661366,12524889,10357570,5406102,16186265,8894108,16310007,77196843,72411204,184211,53954418,9780040,79733120,77849001,32856399,902755,1097311,10924517,69020149,552609,2595065,2989163,21075514,58622,45292308,349907,75488088,1256444,700955,42312250,21861,3485805,33758330,65969465,10439152,5300136,46670665,67856782,73959175,6623411,15486863,4511959,3736372,158313,4257657,296644,23284,15117262,2279287,56985549,521188,2871691,10242222,23216803,18633107,72634823,19417246,71416,974786,952433,955345,16243392,616927,24855144,21550053,6759311,25725901,7648186,9664,5459336,28351130,54405092,380015,68863,9740710,5034461,9394422,10951,348697,8319428,1712791,71479,23822607,6436999,8894009,18535832,712030,474347,60131,60128,474327,474349,25945824,59786,37684429,62467604,480566,3786846,22500310,33140247,63668821,3547088,3098466,3428859,1490038,82398285,11159547,852023,4451714,852014,852019,523853,57086700,2479946,1744298,14785897,14185891,46675480,21106378,11673196,29872977,1868369,1265587,992864,755109,49669162,6530844,2822315,27806760,2321972,1495657,22335323,1888389,758569,16399144,474733,78183508,77911063,752406,7533370,28373249,37444669,878356,66201249,81624901,75615109,12369660,7226799,47443133,25816999,36373870,5787848,191173,1789839,9839076,6642870,43664667,310660,18312637,1664759,1664760,1664763,1664764,81455603,60219972,47932890,49354088,204232,2150873,2645494,23469570,1270905,62726843,23982807,5732050,40367895,28798311,8691327,9725694,8734771,349909,47510715,690627,24784913,5511039,38260494,21725,2509694,4547933,12456914,3921171,190088,823814,8300520,52927,77329044,4831837,593924,12524814,4382461,5405446,71805369,82840904,845766,80010707,32270746,593935,764491,5797391,272323,33351584,60130,367519,5160607,54001558,13629625,63645236,8251307,74169408,57358934,751104,9741122,35847617,3601696,73160513,32903764,64495752,2642575,30860483,702179,7327359,20306503,67539382,26476,23703466,5094115,55704154,3063853,2378467,9454227,75457366,32017367,309408,2949694,843542,843543,35828046,6530724,34172450,65532248,65531919,1868388,18814127,38905720,56528944,32633623,78948317,78036307,46675521,498586,60089480,452331,22837921,56834069,47818716,81778085,10484908,1413590,365182,34322668,56658663,23219572,59630547,5103776,39708883,13854604,8757425,2497286,75158302,2687516,2437918,55263167,28230,895506,79959107,60083947,10996473,10279021,16185993,275376,4676329,79758565,21251990,6422674,2929013,27213531,636502,5401791,3388166,13085770,63873197,5699509,10509642,1681215,54173345,331525,62703584,2931171,1906331,52012854,60129,7055404,600721,2581531,15916434,16343135,6065164,58802539,5715693,46995429,68619803,10537543,275377,22715537,1872276,52224,60146,158354,8313944,2869864,71939600,70467087,17080244,764950,34017673,972543,3520538,44447,31435,13299811,244205,47745898,8192724,36185438,74545105,10044024,17612827,7922814,1739150,2624632,44579839,21125507,2825416,478921,23254147,43739400,41021438,528116,3895521,220116,689802,5512550,2390729,19406821,79331121,9957370,63658638,18009871,646246,6914546,295393,2364379,7374266,17657605,34067800,9081697,40587124,54480270,18574598,37188873,1728896,205952,8117789,37320,592574,22600582,25150938,53597,414331,8147064,1222894,5856005,53553926,2907127,5564728,3606513,37047746,11801646,472097,162096,57900364,239007,68683158,30020699,202349,5886510,13441212,30876946,89960,26388977,420130,37680143,6209875,28009597,79935497,29991,28269157,2845808,338183,13921561,457932,37677716,313191,4228194,79277813,598935,4523848,451406,2479621,45281935,1874304,1234167,9764872,7913432,36036749,3251977,1529842,4500067,4058832,81407633,59854057,21338632,143815,842878,16783984,55443373,5386979,4625119,30406425,1505455,25800865,80010698,36589596,79737096,3809319,205802,72301363,32149193,39162966,54773502,1126435,7394758,5192353,158943,33409691,72528850,68386861,55045581,4746735,5846068,8791568,358057,77838587,77871704,4943209,81399237,4559056,1627966,28881885]
+
+API='https://en.wikipedia.org/w/api.php'
+UA='AgenticAIRiskLiteratureReview/1.0 (research crawl; cwmccabe.ai@gmail.com)'
+CATEGORY='Category:Science fiction short stories'
+LIST_PAGE='List of science fiction short stories'
+OUT='phase2_sf_short_fiction.json'
 
 def api(params,retries=6):
     p=dict(params); p.update({'format':'json','formatversion':'2','maxlag':'5'})
-    req=urllib.request.Request(API+'?'+urllib.parse.urlencode(p),headers={'User-Agent':UA})
+    req=urllib.request.Request(API+'?'+urllib.parse.urlencode(p,doseq=True),headers={'User-Agent':UA})
     for a in range(retries):
         try:
             with urllib.request.urlopen(req,timeout=120) as r:return json.load(r)
@@ -13,32 +19,91 @@ def api(params,retries=6):
             if a+1==retries: raise
             time.sleep(min(30,2**a))
 
+def category_members():
+    items=[]; cont={}
+    while True:
+        p={'action':'query','list':'categorymembers','cmtitle':CATEGORY,'cmnamespace':0,'cmlimit':'max','cmprop':'ids|title|type'}; p.update(cont)
+        d=api(p); items.extend(d['query']['categorymembers'])
+        if 'continue' not in d:return items
+        cont=d['continue']
+
+def fetch_url(url):
+    req=urllib.request.Request(url,headers={'User-Agent':UA})
+    with urllib.request.urlopen(req,timeout=120) as r:return r.read()
+
+def parse_list_rows():
+    url='https://en.wikipedia.org/wiki/'+LIST_PAGE.replace(' ','_')
+    html=fetch_url(url)
+    tables=pd.read_html(io.BytesIO(html))
+    rows=[]
+    for ti,t in enumerate(tables):
+        cols=[str(c).strip() for c in t.columns]
+        lower=[c.lower() for c in cols]
+        title_col=next((cols[i] for i,c in enumerate(lower) if 'title' in c or 'story'==c),None)
+        author_col=next((cols[i] for i,c in enumerate(lower) if 'author' in c or 'writer' in c),None)
+        year_col=next((cols[i] for i,c in enumerate(lower) if 'year' in c or 'date' in c),None)
+        if not title_col: continue
+        for ri,row in t.iterrows():
+            title=str(row.get(title_col,'')).strip()
+            if not title or title.lower() in {'nan','title','story'}: continue
+            rows.append({'table_index':ti,'row_index':int(ri),'listed_title':title,'author':str(row.get(author_col,'')).strip() if author_col else '', 'year':str(row.get(year_col,'')).strip() if year_col else ''})
+    return rows,tables
+
+def chunks(seq,n):
+    for i in range(0,len(seq),n):yield seq[i:i+n]
+
 def clean(v):
     try:return mwparserfromhell.parse(str(v)).strip_code(normalize=True,collapse=True).strip()
     except:return str(v).strip()
 
-def main():
-    out=[]; failures=[]
-    for i in range(0,len(PAGEIDS),20):
-        batch=PAGEIDS[i:i+20]
+def resolve_titles(titles):
+    resolved={}; failures=[]
+    for bi,batch in enumerate(chunks(sorted(set(titles)),20),1):
         try:
-            d=api({'action':'query','prop':'revisions|info','pageids':'|'.join(map(str,batch)),'rvprop':'content','rvslots':'main','inprop':'url'})
-            for p in d['query']['pages']:
+            d=api({'action':'query','prop':'revisions|info','titles':'|'.join(batch),'rvprop':'content','rvslots':'main','inprop':'url','redirects':1})
+            q=d['query']; tmap={t:t for t in batch}
+            for group in ['normalized','redirects']:
+                for item in q.get(group,[]):
+                    old,new=item['from'],item['to']
+                    for src,target in list(tmap.items()):
+                        if target==old:tmap[src]=new
+            pages={p['title']:p for p in q['pages']}
+            for listed in batch:
+                ct=tmap.get(listed,listed); p=pages.get(ct)
+                if not p or p.get('missing'): failures.append({'title':listed,'error':'missing'}); continue
                 content=''; revs=p.get('revisions',[])
-                if revs: content=revs[0].get('slots',{}).get('main',{}).get('content','')
+                if revs:content=revs[0].get('slots',{}).get('main',{}).get('content','')
                 code=mwparserfromhell.parse(content); fields={}; infobox=''
                 for t in code.filter_templates(recursive=False):
                     n=clean(t.name).lower()
                     if n.startswith('infobox') and any(x in n for x in ['book','novel','short story']):
                         infobox=clean(t.name)
-                        for par in t.params: fields[clean(par.name).lower()]=clean(par.value)
+                        for par in t.params:fields[clean(par.name).lower()]=clean(par.value)
                         break
-                plain=code.strip_code(normalize=True,collapse=True)
-                lead=plain.split('\n\n',1)[0].strip()
-                out.append({'pageid':p['pageid'],'title':p['title'],'fullurl':p.get('fullurl',''),'infobox_template':infobox,'infobox_fields':fields,'lead':lead})
-        except Exception as e: failures.append({'pageids':batch,'error':repr(e)})
-        print(i+len(batch),len(PAGEIDS),flush=True); time.sleep(.05)
-    with open('phase2_candidate_metadata.json','w',encoding='utf-8') as f: json.dump({'records':out,'failures':failures},f,ensure_ascii=False)
-    print(json.dumps({'records':len(out),'failures':failures}))
+                resolved[listed]={'pageid':p['pageid'],'title':p['title'],'fullurl':p.get('fullurl',''),'extract':code.strip_code(normalize=True,collapse=True),'infobox_template':infobox,'infobox_fields':fields}
+        except Exception as e:
+            failures.append({'batch':batch,'error':repr(e)})
+        print('content batch',bi,flush=True);time.sleep(.05)
+    return resolved,failures
+
+def main():
+    cats=category_members(); list_rows,tables=parse_list_rows()
+    cat_titles=[x['title'] for x in cats]; list_titles=[x['listed_title'] for x in list_rows]
+    resolved,failures=resolve_titles(cat_titles+list_titles)
+    by_pid=defaultdict(lambda:{'category_memberships':[],'list_rows':[],'listed_titles':[]})
+    pages={}
+    for x in cats:
+        p=resolved.get(x['title'])
+        if not p:continue
+        pages[p['pageid']]=p; d=by_pid[p['pageid']]; d['category_memberships'].append(CATEGORY); d['listed_titles'].append(x['title'])
+    for x in list_rows:
+        p=resolved.get(x['listed_title'])
+        if not p:continue
+        pages[p['pageid']]=p; d=by_pid[p['pageid']]; d['list_rows'].append(x); d['listed_titles'].append(x['listed_title'])
+    records=[]
+    for pid,prov in by_pid.items():
+        records.append({**pages[pid],'category_memberships':sorted(set(prov['category_memberships'])),'list_rows':prov['list_rows'],'listed_titles':sorted(set(prov['listed_titles']))})
+    payload={'crawl_timestamp_utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'category':CATEGORY,'list_page':LIST_PAGE,'category_memberships_total':len(cats),'list_rows_total':len(list_rows),'list_table_count':len(tables),'distinct_listed_titles':len(set(cat_titles+list_titles)),'distinct_canonical_pageids':len(records),'failures':failures,'records':sorted(records,key=lambda r:(r['title'].casefold(),r['pageid']))}
+    with open(OUT,'w',encoding='utf-8') as f:json.dump(payload,f,ensure_ascii=False)
+    print(json.dumps({k:payload[k] for k in ['category_memberships_total','list_rows_total','list_table_count','distinct_listed_titles','distinct_canonical_pageids','failures']},ensure_ascii=False))
 if __name__=='__main__':main()
-# trigger after base-workflow output path update
