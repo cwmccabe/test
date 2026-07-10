@@ -55,6 +55,7 @@ def resolve_batch(titles):
         "prop": "extracts|info",
         "titles": "|".join(titles),
         "explaintext": "1",
+        "exlimit": "max",
         "inprop": "url",
         "redirects": "1",
     })
@@ -116,8 +117,7 @@ def main():
                     continue
                 resolved[listed_title] = page
         except Exception as e:
-            for title in batch:
-                unresolved_titles.append(title)
+            unresolved_titles.extend(batch)
             access_failures.append({"extract_batch": batch, "error": repr(e)})
         print(f"extract batch {i}", flush=True)
         time.sleep(0.05)
