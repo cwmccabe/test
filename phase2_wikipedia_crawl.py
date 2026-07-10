@@ -1,168 +1,43 @@
-import json
-import time
-import urllib.parse
-import urllib.request
-from collections import defaultdict
+import json,time,urllib.parse,urllib.request
 import mwparserfromhell
+API='https://en.wikipedia.org/w/api.php'; UA='AgenticAIRiskLiteratureReview/1.0 (research crawl; cwmccabe.ai@gmail.com)'
+PAGEIDS=[36218,36390851,496941,55503282,8894063,33455920,2080,4792251,2646076,55206552,61112100,74806362,68339911,33778980,23281,55645261,2465029,408735,2233223,16039594,71480,1456993,7575811,56994349,53750390,3261311,39673791,370203,55289127,79873171,4579565,41476698,48083752,19357206,1813784,47079989,55805386,3890107,65652336,47580669,74579274,1048130,3452658,77652217,1858057,39516319,63440967,23970532,4082,4081,1789029,1720972,12690765,44449,1963048,31009850,63896277,3661366,12524889,10357570,5406102,16186265,8894108,16310007,77196843,72411204,184211,53954418,9780040,79733120,77849001,32856399,902755,1097311,10924517,69020149,552609,2595065,2989163,21075514,58622,45292308,349907,75488088,1256444,700955,42312250,21861,3485805,33758330,65969465,10439152,5300136,46670665,67856782,73959175,6623411,15486863,4511959,3736372,158313,4257657,296644,23284,15117262,2279287,56985549,521188,2871691,10242222,23216803,18633107,72634823,19417246,71416,974786,952433,955345,16243392,616927,24855144,21550053,6759311,25725901,7648186,9664,5459336,28351130,54405092,380015,68863,9740710,5034461,9394422,10951,348697,8319428,1712791,71479,23822607,6436999,8894009,18535832,712030,474347,60131,60128,474327,474349,25945824,59786,37684429,62467604,480566,3786846,22500310,33140247,63668821,3547088,3098466,3428859,1490038,82398285,11159547,852023,4451714,852014,852019,523853,57086700,2479946,1744298,14785897,14185891,46675480,21106378,11673196,29872977,1868369,1265587,992864,755109,49669162,6530844,2822315,27806760,2321972,1495657,22335323,1888389,758569,16399144,474733,78183508,77911063,752406,7533370,28373249,37444669,878356,66201249,81624901,75615109,12369660,7226799,47443133,25816999,36373870,5787848,191173,1789839,9839076,6642870,43664667,310660,18312637,1664759,1664760,1664763,1664764,81455603,60219972,47932890,49354088,204232,2150873,2645494,23469570,1270905,62726843,23982807,5732050,40367895,28798311,8691327,9725694,8734771,349909,47510715,690627,24784913,5511039,38260494,21725,2509694,4547933,12456914,3921171,190088,823814,8300520,52927,77329044,4831837,593924,12524814,4382461,5405446,71805369,82840904,845766,80010707,32270746,593935,764491,5797391,272323,33351584,60130,367519,5160607,54001558,13629625,63645236,8251307,74169408,57358934,751104,9741122,35847617,3601696,73160513,32903764,64495752,2642575,30860483,702179,7327359,20306503,67539382,26476,23703466,5094115,55704154,3063853,2378467,9454227,75457366,32017367,309408,2949694,843542,843543,35828046,6530724,34172450,65532248,65531919,1868388,18814127,38905720,56528944,32633623,78948317,78036307,46675521,498586,60089480,452331,22837921,56834069,47818716,81778085,10484908,1413590,365182,34322668,56658663,23219572,59630547,5103776,39708883,13854604,8757425,2497286,75158302,2687516,2437918,55263167,28230,895506,79959107,60083947,10996473,10279021,16185993,275376,4676329,79758565,21251990,6422674,2929013,27213531,636502,5401791,3388166,13085770,63873197,5699509,10509642,1681215,54173345,331525,62703584,2931171,1906331,52012854,60129,7055404,600721,2581531,15916434,16343135,6065164,58802539,5715693,46995429,68619803,10537543,275377,22715537,1872276,52224,60146,158354,8313944,2869864,71939600,70467087,17080244,764950,34017673,972543,3520538,44447,31435,13299811,244205,47745898,8192724,36185438,74545105,10044024,17612827,7922814,1739150,2624632,44579839,21125507,2825416,478921,23254147,43739400,41021438,528116,3895521,220116,689802,5512550,2390729,19406821,79331121,9957370,63658638,18009871,646246,6914546,295393,2364379,7374266,17657605,34067800,9081697,40587124,54480270,18574598,37188873,1728896,205952,8117789,37320,592574,22600582,25150938,53597,414331,8147064,1222894,5856005,53553926,2907127,5564728,3606513,37047746,11801646,472097,162096,57900364,239007,68683158,30020699,202349,5886510,13441212,30876946,89960,26388977,420130,37680143,6209875,28009597,79935497,29991,28269157,2845808,338183,13921561,457932,37677716,313191,4228194,79277813,598935,4523848,451406,2479621,45281935,1874304,1234167,9764872,7913432,36036749,3251977,1529842,4500067,4058832,81407633,59854057,21338632,143815,842878,16783984,55443373,5386979,4625119,30406425,1505455,25800865,80010698,36589596,79737096,3809319,205802,72301363,32149193,39162966,54773502,1126435,7394758,5192353,158943,33409691,72528850,68386861,55045581,4746735,5846068,8791568,358057,77838587,77871704,4943209,81399237,4559056,1627966,28881885]
 
-API = "https://en.wikipedia.org/w/api.php"
-UA = "AgenticAIRiskLiteratureReview/1.0 (research crawl; cwmccabe.ai@gmail.com)"
-ROOT = "Category:Science fiction novels by year"
-OUT = "phase2_sf_novels.json"
-
-
-def api(params, retries=6):
-    params = dict(params)
-    params.update({"format": "json", "formatversion": "2", "maxlag": "5"})
-    url = API + "?" + urllib.parse.urlencode(params, doseq=True)
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    for attempt in range(retries):
+def api(params,retries=6):
+    p=dict(params); p.update({'format':'json','formatversion':'2','maxlag':'5'})
+    req=urllib.request.Request(API+'?'+urllib.parse.urlencode(p),headers={'User-Agent':UA})
+    for a in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=120) as r:
-                return json.load(r)
+            with urllib.request.urlopen(req,timeout=120) as r:return json.load(r)
         except Exception:
-            if attempt + 1 == retries:
-                raise
-            time.sleep(min(30, 2 ** attempt))
+            if a+1==retries: raise
+            time.sleep(min(30,2**a))
 
-
-def category_members(category, namespace):
-    items, cont = [], {}
-    while True:
-        params = {
-            "action": "query", "list": "categorymembers", "cmtitle": category,
-            "cmnamespace": namespace, "cmlimit": "max", "cmprop": "ids|title|type",
-        }
-        params.update(cont)
-        data = api(params)
-        items.extend(data["query"]["categorymembers"])
-        if "continue" not in data:
-            return items
-        cont = data["continue"]
-
-
-def chunks(seq, n):
-    for i in range(0, len(seq), n):
-        yield seq[i:i+n]
-
-
-def strip_wikitext(content):
-    try:
-        return mwparserfromhell.parse(content).strip_code(normalize=True, collapse=True)
-    except Exception:
-        return content
-
-
-def resolve_batch(titles):
-    data = api({
-        "action": "query", "prop": "revisions|info", "titles": "|".join(titles),
-        "rvprop": "content", "rvslots": "main", "inprop": "url", "redirects": "1",
-    })
-    query = data["query"]
-    title_map = {t: t for t in titles}
-    for item in query.get("normalized", []):
-        old, new = item["from"], item["to"]
-        for src, target in list(title_map.items()):
-            if target == old:
-                title_map[src] = new
-    for item in query.get("redirects", []):
-        old, new = item["from"], item["to"]
-        for src, target in list(title_map.items()):
-            if target == old:
-                title_map[src] = new
-    pages = {}
-    for p in query["pages"]:
-        content = ""
-        revs = p.get("revisions", [])
-        if revs:
-            content = revs[0].get("slots", {}).get("main", {}).get("content", "")
-        pages[p["title"]] = {
-            "pageid": p["pageid"], "title": p["title"], "fullurl": p.get("fullurl", ""),
-            "extract": strip_wikitext(content), "missing": bool(p.get("missing", False)),
-        }
-    return title_map, pages
-
+def clean(v):
+    try:return mwparserfromhell.parse(str(v)).strip_code(normalize=True,collapse=True).strip()
+    except:return str(v).strip()
 
 def main():
-    subcats = category_members(ROOT, 14)
-    year_categories = sorted(
-        [x for x in subcats if x["title"].endswith(" science fiction novels")],
-        key=lambda x: x["title"],
-    )
-    memberships, access_failures = [], []
-    for i, cat in enumerate(year_categories, 1):
+    out=[]; failures=[]
+    for i in range(0,len(PAGEIDS),20):
+        batch=PAGEIDS[i:i+20]
         try:
-            for m in category_members(cat["title"], 0):
-                memberships.append({
-                    "year_category": cat["title"], "listed_pageid": m["pageid"],
-                    "listed_title": m["title"],
-                })
-        except Exception as e:
-            access_failures.append({"category": cat["title"], "error": repr(e)})
-        print(f"category {i}/{len(year_categories)} {cat['title']}", flush=True)
-        time.sleep(0.05)
-
-    unique_titles = sorted({m["listed_title"] for m in memberships})
-    resolved, unresolved_titles = {}, []
-    for i, batch in enumerate(chunks(unique_titles, 20), 1):
-        try:
-            title_map, pages = resolve_batch(batch)
-            for listed_title in batch:
-                canonical_title = title_map.get(listed_title, listed_title)
-                page = pages.get(canonical_title)
-                if page is None:
-                    unresolved_titles.append(listed_title)
-                else:
-                    resolved[listed_title] = page
-        except Exception as e:
-            unresolved_titles.extend(batch)
-            access_failures.append({"content_batch": batch, "error": repr(e)})
-        if i % 10 == 0 or i * 20 >= len(unique_titles):
-            print(f"content batch {i}/{(len(unique_titles)+19)//20}", flush=True)
-        time.sleep(0.05)
-
-    by_canonical_pageid = defaultdict(lambda: {
-        "year_categories": [], "listed_titles": [], "listed_pageids": []
-    })
-    pages = {}
-    for m in memberships:
-        page = resolved.get(m["listed_title"])
-        if page is None:
-            continue
-        pid = page["pageid"]
-        pages[pid] = page
-        d = by_canonical_pageid[pid]
-        d["year_categories"].append(m["year_category"])
-        d["listed_titles"].append(m["listed_title"])
-        d["listed_pageids"].append(m["listed_pageid"])
-
-    records = []
-    for pid, provenance in by_canonical_pageid.items():
-        records.append({
-            **pages[pid],
-            "year_categories": sorted(set(provenance["year_categories"])),
-            "listed_titles": sorted(set(provenance["listed_titles"])),
-            "listed_pageids": sorted(set(provenance["listed_pageids"])),
-        })
-
-    empty_extract_pageids = sorted(r["pageid"] for r in records if not r["extract"].strip())
-    payload = {
-        "crawl_timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "root_category": ROOT, "year_category_count": len(year_categories),
-        "year_categories": [x["title"] for x in year_categories],
-        "total_memberships": len(memberships), "distinct_listed_titles": len(unique_titles),
-        "distinct_canonical_pageids": len(records), "access_failures": access_failures,
-        "unresolved_titles": sorted(set(unresolved_titles)),
-        "empty_extract_pageids": empty_extract_pageids,
-        "records": sorted(records, key=lambda x: (x["title"].casefold(), x["pageid"])),
-    }
-    with open(OUT, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False)
-    summary_keys = ["crawl_timestamp_utc", "year_category_count", "total_memberships",
-        "distinct_listed_titles", "distinct_canonical_pageids", "access_failures",
-        "unresolved_titles", "empty_extract_pageids"]
-    print(json.dumps({k: payload[k] for k in summary_keys}, ensure_ascii=False))
-
-
-if __name__ == "__main__":
-    main()
+            d=api({'action':'query','prop':'revisions|info','pageids':'|'.join(map(str,batch)),'rvprop':'content','rvslots':'main','inprop':'url'})
+            for p in d['query']['pages']:
+                content=''; revs=p.get('revisions',[])
+                if revs: content=revs[0].get('slots',{}).get('main',{}).get('content','')
+                code=mwparserfromhell.parse(content); fields={}; infobox=''
+                for t in code.filter_templates(recursive=False):
+                    n=clean(t.name).lower()
+                    if n.startswith('infobox') and any(x in n for x in ['book','novel','short story']):
+                        infobox=clean(t.name)
+                        for par in t.params: fields[clean(par.name).lower()]=clean(par.value)
+                        break
+                plain=code.strip_code(normalize=True,collapse=True)
+                lead=plain.split('\n\n',1)[0].strip()
+                out.append({'pageid':p['pageid'],'title':p['title'],'fullurl':p.get('fullurl',''),'infobox_template':infobox,'infobox_fields':fields,'lead':lead})
+        except Exception as e: failures.append({'pageids':batch,'error':repr(e)})
+        print(i+len(batch),len(PAGEIDS),flush=True); time.sleep(.05)
+    with open('phase2_candidate_metadata.json','w',encoding='utf-8') as f: json.dump({'records':out,'failures':failures},f,ensure_ascii=False)
+    print(json.dumps({'records':len(out),'failures':failures}))
+if __name__=='__main__':main()
