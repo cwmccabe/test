@@ -132,4 +132,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# Triggered after workflow definition was present on the default branch.
+# Pull-request branch trigger for temporary retrieval.
