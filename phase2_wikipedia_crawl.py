@@ -3,6 +3,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 API = "https://en.wikipedia.org/w/api.php"
 UA = "AgenticAIRiskLiteratureReview/1.0 (research crawl; cwmccabe.ai@gmail.com)"
@@ -44,43 +45,26 @@ def category_members(category, namespace):
         cont = data["continue"]
 
 
-def chunks(seq, n):
-    for i in range(0, len(seq), n):
-        yield seq[i:i+n]
-
-
-def resolve_batch(titles):
+def resolve_title(listed_title):
     data = api({
         "action": "query",
         "prop": "extracts|info",
-        "titles": "|".join(titles),
+        "titles": listed_title,
         "explaintext": "1",
-        "exlimit": "max",
         "inprop": "url",
         "redirects": "1",
     })
-    query = data["query"]
-    title_map = {t: t for t in titles}
-    for item in query.get("normalized", []):
-        old, new = item["from"], item["to"]
-        for src, target in list(title_map.items()):
-            if target == old:
-                title_map[src] = new
-    for item in query.get("redirects", []):
-        old, new = item["from"], item["to"]
-        for src, target in list(title_map.items()):
-            if target == old:
-                title_map[src] = new
-    pages_by_title = {}
-    for p in query["pages"]:
-        pages_by_title[p["title"]] = {
-            "pageid": p["pageid"],
-            "title": p["title"],
-            "fullurl": p.get("fullurl", ""),
-            "extract": p.get("extract", ""),
-            "missing": bool(p.get("missing", False)),
-        }
-    return title_map, pages_by_title
+    pages = data["query"]["pages"]
+    if len(pages) != 1:
+        raise RuntimeError(f"Unexpected page count for {listed_title!r}: {len(pages)}")
+    p = pages[0]
+    return {
+        "pageid": p["pageid"],
+        "title": p["title"],
+        "fullurl": p.get("fullurl", ""),
+        "extract": p.get("extract", ""),
+        "missing": bool(p.get("missing", False)),
+    }
 
 
 def main():
@@ -104,23 +88,20 @@ def main():
         time.sleep(0.05)
 
     unique_titles = sorted({m["listed_title"] for m in memberships})
-    resolved = {}
-    unresolved_titles = []
-    for i, batch in enumerate(chunks(unique_titles, 20), 1):
-        try:
-            title_map, pages = resolve_batch(batch)
-            for listed_title in batch:
-                canonical_title = title_map.get(listed_title, listed_title)
-                page = pages.get(canonical_title)
-                if page is None:
-                    unresolved_titles.append(listed_title)
-                    continue
-                resolved[listed_title] = page
-        except Exception as e:
-            unresolved_titles.extend(batch)
-            access_failures.append({"extract_batch": batch, "error": repr(e)})
-        print(f"extract batch {i}", flush=True)
-        time.sleep(0.05)
+    resolved, unresolved_titles = {}, []
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        future_to_title = {executor.submit(resolve_title, title): title for title in unique_titles}
+        completed = 0
+        for future in as_completed(future_to_title):
+            title = future_to_title[future]
+            try:
+                resolved[title] = future.result()
+            except Exception as e:
+                unresolved_titles.append(title)
+                access_failures.append({"extract_title": title, "error": repr(e)})
+            completed += 1
+            if completed % 100 == 0 or completed == len(unique_titles):
+                print(f"extract {completed}/{len(unique_titles)}", flush=True)
 
     by_canonical_pageid = defaultdict(lambda: {
         "year_categories": [], "listed_titles": [], "listed_pageids": []
