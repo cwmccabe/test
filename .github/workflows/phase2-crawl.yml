@@ -4,6 +4,8 @@ on:
     paths:
       - '.github/workflows/phase2-crawl.yml'
       - 'phase2_wikipedia_crawl.py'
+  issues:
+    types: [opened]
   workflow_dispatch:
 
 jobs:
