@@ -46,9 +46,10 @@ def parse_list_rows():
             cells=tr.find_all(['td','th'])
             if title_i>=len(cells): continue
             cell=cells[title_i]
-            link=next((a for a in cell.find_all('a',href=True) if a['href'].startswith('/wiki/') and not a['href'].startswith('/wiki/File:')),None)
+            link=next((a for a in cell.find_all('a',href=True) if (a['href'].startswith('/wiki/') or a['href'].startswith('./')) and 'File:' not in a['href']),None)
             if not link: continue
-            listed_title=urllib.parse.unquote(link['href'].split('/wiki/',1)[1]).replace('_',' ')
+            href=link['href']; raw=href.split('/wiki/',1)[1] if '/wiki/' in href else href[2:]
+            listed_title=urllib.parse.unquote(raw.split('#',1)[0]).replace('_',' ')
             author=cells[author_i].get_text(' ',strip=True) if author_i is not None and author_i<len(cells) else ''
             year=cells[year_i].get_text(' ',strip=True) if year_i is not None and year_i<len(cells) else ''
             rows.append({'table_index':ti,'row_index':ri,'listed_title':listed_title,'display_title':cell.get_text(' ',strip=True),'author':author,'year':year})
