@@ -26,8 +26,7 @@ def api(params, retries=6):
 
 
 def category_members(category, namespace):
-    items = []
-    cont = {}
+    items, cont = [], {}
     while True:
         params = {
             "action": "query",
@@ -41,14 +40,46 @@ def category_members(category, namespace):
         data = api(params)
         items.extend(data["query"]["categorymembers"])
         if "continue" not in data:
-            break
+            return items
         cont = data["continue"]
-    return items
 
 
 def chunks(seq, n):
     for i in range(0, len(seq), n):
         yield seq[i:i+n]
+
+
+def resolve_batch(titles):
+    data = api({
+        "action": "query",
+        "prop": "extracts|info",
+        "titles": "|".join(titles),
+        "explaintext": "1",
+        "inprop": "url",
+        "redirects": "1",
+    })
+    query = data["query"]
+    title_map = {t: t for t in titles}
+    for item in query.get("normalized", []):
+        old, new = item["from"], item["to"]
+        for src, target in list(title_map.items()):
+            if target == old:
+                title_map[src] = new
+    for item in query.get("redirects", []):
+        old, new = item["from"], item["to"]
+        for src, target in list(title_map.items()):
+            if target == old:
+                title_map[src] = new
+    pages_by_title = {}
+    for p in query["pages"]:
+        pages_by_title[p["title"]] = {
+            "pageid": p["pageid"],
+            "title": p["title"],
+            "fullurl": p.get("fullurl", ""),
+            "extract": p.get("extract", ""),
+            "missing": bool(p.get("missing", False)),
+        }
+    return title_map, pages_by_title
 
 
 def main():
@@ -57,12 +88,10 @@ def main():
         [x for x in subcats if x["title"].endswith(" science fiction novels")],
         key=lambda x: x["title"],
     )
-    memberships = []
-    access_failures = []
+    memberships, access_failures = [], []
     for i, cat in enumerate(year_categories, 1):
         try:
-            members = category_members(cat["title"], 0)
-            for m in members:
+            for m in category_members(cat["title"], 0):
                 memberships.append({
                     "year_category": cat["title"],
                     "listed_pageid": m["pageid"],
@@ -70,66 +99,76 @@ def main():
                 })
         except Exception as e:
             access_failures.append({"category": cat["title"], "error": repr(e)})
-        print(f"{i}/{len(year_categories)} {cat['title']}", flush=True)
+        print(f"category {i}/{len(year_categories)} {cat['title']}", flush=True)
         time.sleep(0.05)
 
-    by_pageid = defaultdict(lambda: {"year_categories": [], "listed_titles": []})
-    for m in memberships:
-        d = by_pageid[m["listed_pageid"]]
-        d["year_categories"].append(m["year_category"])
-        d["listed_titles"].append(m["listed_title"])
-
-    pageids = sorted(by_pageid)
-    pages = {}
-    for i, batch in enumerate(chunks(pageids, 20), 1):
-        data = api({
-            "action": "query",
-            "prop": "extracts|info",
-            "pageids": "|".join(map(str, batch)),
-            "explaintext": "1",
-            "inprop": "url",
-            "redirects": "1",
-        })
-        for p in data["query"]["pages"]:
-            pages[p["pageid"]] = {
-                "pageid": p["pageid"],
-                "title": p["title"],
-                "fullurl": p.get("fullurl", ""),
-                "extract": p.get("extract", ""),
-            }
+    unique_titles = sorted({m["listed_title"] for m in memberships})
+    resolved = {}
+    unresolved_titles = []
+    for i, batch in enumerate(chunks(unique_titles, 20), 1):
+        try:
+            title_map, pages = resolve_batch(batch)
+            for listed_title in batch:
+                canonical_title = title_map.get(listed_title, listed_title)
+                page = pages.get(canonical_title)
+                if page is None:
+                    unresolved_titles.append(listed_title)
+                    continue
+                resolved[listed_title] = page
+        except Exception as e:
+            for title in batch:
+                unresolved_titles.append(title)
+            access_failures.append({"extract_batch": batch, "error": repr(e)})
         print(f"extract batch {i}", flush=True)
         time.sleep(0.05)
 
+    by_canonical_pageid = defaultdict(lambda: {
+        "year_categories": [], "listed_titles": [], "listed_pageids": []
+    })
+    pages = {}
+    for m in memberships:
+        page = resolved.get(m["listed_title"])
+        if page is None:
+            continue
+        pid = page["pageid"]
+        pages[pid] = page
+        d = by_canonical_pageid[pid]
+        d["year_categories"].append(m["year_category"])
+        d["listed_titles"].append(m["listed_title"])
+        d["listed_pageids"].append(m["listed_pageid"])
+
     records = []
-    missing_extract_pages = []
-    for pageid, provenance in by_pageid.items():
-        page = pages.get(pageid)
-        if not page:
-            missing_extract_pages.append(pageid)
-            page = {"pageid": pageid, "title": provenance["listed_titles"][0], "fullurl": "", "extract": ""}
+    for pid, provenance in by_canonical_pageid.items():
         records.append({
-            **page,
+            **pages[pid],
             "year_categories": sorted(set(provenance["year_categories"])),
             "listed_titles": sorted(set(provenance["listed_titles"])),
+            "listed_pageids": sorted(set(provenance["listed_pageids"])),
         })
 
+    empty_extract_pageids = sorted(r["pageid"] for r in records if not r["extract"].strip())
     payload = {
         "crawl_timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "root_category": ROOT,
         "year_category_count": len(year_categories),
         "year_categories": [x["title"] for x in year_categories],
         "total_memberships": len(memberships),
-        "distinct_pageids": len(records),
+        "distinct_listed_titles": len(unique_titles),
+        "distinct_canonical_pageids": len(records),
         "access_failures": access_failures,
-        "missing_extract_pages": missing_extract_pages,
+        "unresolved_titles": sorted(set(unresolved_titles)),
+        "empty_extract_pageids": empty_extract_pageids,
         "records": sorted(records, key=lambda x: (x["title"].casefold(), x["pageid"])),
     }
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False)
-    print(json.dumps({k: payload[k] for k in ["crawl_timestamp_utc", "year_category_count", "total_memberships", "distinct_pageids", "access_failures", "missing_extract_pages"]}, ensure_ascii=False))
+    summary_keys = [
+        "crawl_timestamp_utc", "year_category_count", "total_memberships",
+        "distinct_listed_titles", "distinct_canonical_pageids", "access_failures",
+        "unresolved_titles", "empty_extract_pageids"
+    ]
+    print(json.dumps({k: payload[k] for k in summary_keys}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
     main()
-
-# Pull-request branch trigger for temporary retrieval.
