@@ -3,7 +3,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import mwparserfromhell
 
 API = "https://en.wikipedia.org/w/api.php"
 UA = "AgenticAIRiskLiteratureReview/1.0 (research crawl; cwmccabe.ai@gmail.com)"
@@ -18,7 +18,7 @@ def api(params, retries=6):
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=90) as r:
+            with urllib.request.urlopen(req, timeout=120) as r:
                 return json.load(r)
         except Exception:
             if attempt + 1 == retries:
@@ -30,12 +30,8 @@ def category_members(category, namespace):
     items, cont = [], {}
     while True:
         params = {
-            "action": "query",
-            "list": "categorymembers",
-            "cmtitle": category,
-            "cmnamespace": namespace,
-            "cmlimit": "max",
-            "cmprop": "ids|title|type",
+            "action": "query", "list": "categorymembers", "cmtitle": category,
+            "cmnamespace": namespace, "cmlimit": "max", "cmprop": "ids|title|type",
         }
         params.update(cont)
         data = api(params)
@@ -45,26 +41,46 @@ def category_members(category, namespace):
         cont = data["continue"]
 
 
-def resolve_title(listed_title):
+def chunks(seq, n):
+    for i in range(0, len(seq), n):
+        yield seq[i:i+n]
+
+
+def strip_wikitext(content):
+    try:
+        return mwparserfromhell.parse(content).strip_code(normalize=True, collapse=True)
+    except Exception:
+        return content
+
+
+def resolve_batch(titles):
     data = api({
-        "action": "query",
-        "prop": "extracts|info",
-        "titles": listed_title,
-        "explaintext": "1",
-        "inprop": "url",
-        "redirects": "1",
+        "action": "query", "prop": "revisions|info", "titles": "|".join(titles),
+        "rvprop": "content", "rvslots": "main", "inprop": "url", "redirects": "1",
     })
-    pages = data["query"]["pages"]
-    if len(pages) != 1:
-        raise RuntimeError(f"Unexpected page count for {listed_title!r}: {len(pages)}")
-    p = pages[0]
-    return {
-        "pageid": p["pageid"],
-        "title": p["title"],
-        "fullurl": p.get("fullurl", ""),
-        "extract": p.get("extract", ""),
-        "missing": bool(p.get("missing", False)),
-    }
+    query = data["query"]
+    title_map = {t: t for t in titles}
+    for item in query.get("normalized", []):
+        old, new = item["from"], item["to"]
+        for src, target in list(title_map.items()):
+            if target == old:
+                title_map[src] = new
+    for item in query.get("redirects", []):
+        old, new = item["from"], item["to"]
+        for src, target in list(title_map.items()):
+            if target == old:
+                title_map[src] = new
+    pages = {}
+    for p in query["pages"]:
+        content = ""
+        revs = p.get("revisions", [])
+        if revs:
+            content = revs[0].get("slots", {}).get("main", {}).get("content", "")
+        pages[p["title"]] = {
+            "pageid": p["pageid"], "title": p["title"], "fullurl": p.get("fullurl", ""),
+            "extract": strip_wikitext(content), "missing": bool(p.get("missing", False)),
+        }
+    return title_map, pages
 
 
 def main():
@@ -78,8 +94,7 @@ def main():
         try:
             for m in category_members(cat["title"], 0):
                 memberships.append({
-                    "year_category": cat["title"],
-                    "listed_pageid": m["pageid"],
+                    "year_category": cat["title"], "listed_pageid": m["pageid"],
                     "listed_title": m["title"],
                 })
         except Exception as e:
@@ -89,19 +104,22 @@ def main():
 
     unique_titles = sorted({m["listed_title"] for m in memberships})
     resolved, unresolved_titles = {}, []
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        future_to_title = {executor.submit(resolve_title, title): title for title in unique_titles}
-        completed = 0
-        for future in as_completed(future_to_title):
-            title = future_to_title[future]
-            try:
-                resolved[title] = future.result()
-            except Exception as e:
-                unresolved_titles.append(title)
-                access_failures.append({"extract_title": title, "error": repr(e)})
-            completed += 1
-            if completed % 100 == 0 or completed == len(unique_titles):
-                print(f"extract {completed}/{len(unique_titles)}", flush=True)
+    for i, batch in enumerate(chunks(unique_titles, 20), 1):
+        try:
+            title_map, pages = resolve_batch(batch)
+            for listed_title in batch:
+                canonical_title = title_map.get(listed_title, listed_title)
+                page = pages.get(canonical_title)
+                if page is None:
+                    unresolved_titles.append(listed_title)
+                else:
+                    resolved[listed_title] = page
+        except Exception as e:
+            unresolved_titles.extend(batch)
+            access_failures.append({"content_batch": batch, "error": repr(e)})
+        if i % 10 == 0 or i * 20 >= len(unique_titles):
+            print(f"content batch {i}/{(len(unique_titles)+19)//20}", flush=True)
+        time.sleep(0.05)
 
     by_canonical_pageid = defaultdict(lambda: {
         "year_categories": [], "listed_titles": [], "listed_pageids": []
@@ -130,24 +148,19 @@ def main():
     empty_extract_pageids = sorted(r["pageid"] for r in records if not r["extract"].strip())
     payload = {
         "crawl_timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "root_category": ROOT,
-        "year_category_count": len(year_categories),
+        "root_category": ROOT, "year_category_count": len(year_categories),
         "year_categories": [x["title"] for x in year_categories],
-        "total_memberships": len(memberships),
-        "distinct_listed_titles": len(unique_titles),
-        "distinct_canonical_pageids": len(records),
-        "access_failures": access_failures,
+        "total_memberships": len(memberships), "distinct_listed_titles": len(unique_titles),
+        "distinct_canonical_pageids": len(records), "access_failures": access_failures,
         "unresolved_titles": sorted(set(unresolved_titles)),
         "empty_extract_pageids": empty_extract_pageids,
         "records": sorted(records, key=lambda x: (x["title"].casefold(), x["pageid"])),
     }
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False)
-    summary_keys = [
-        "crawl_timestamp_utc", "year_category_count", "total_memberships",
+    summary_keys = ["crawl_timestamp_utc", "year_category_count", "total_memberships",
         "distinct_listed_titles", "distinct_canonical_pageids", "access_failures",
-        "unresolved_titles", "empty_extract_pageids"
-    ]
+        "unresolved_titles", "empty_extract_pageids"]
     print(json.dumps({k: payload[k] for k in summary_keys}, ensure_ascii=False))
 
 
