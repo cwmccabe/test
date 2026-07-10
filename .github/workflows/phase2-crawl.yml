@@ -16,11 +16,11 @@ jobs:
           python-version: '3.12'
       - name: Install wikitext parser
         run: python -m pip install --quiet mwparserfromhell
-      - name: Crawl Wikimedia category frame
+      - name: Retrieve retained-candidate metadata
         run: python phase2_wikipedia_crawl.py
-      - name: Upload crawl dataset
+      - name: Upload candidate metadata
         uses: actions/upload-artifact@v4
         with:
-          name: phase2-sf-novels
-          path: phase2_sf_novels.json
+          name: phase2-candidate-metadata
+          path: phase2_candidate_metadata.json
           retention-days: 1
