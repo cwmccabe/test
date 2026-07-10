@@ -6,9 +6,32 @@ on:
   workflow_dispatch:
 
 jobs:
-  crawl:
+  folklore:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
+    env:
+      FRAME: folklore
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install crawl dependencies
+        run: python -m pip install --quiet mwparserfromhell
+      - name: Crawl folklore fairy-tale legend sampling frame
+        run: python phase2_wikipedia_crawl.py
+      - name: Upload folklore crawl
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-folklore-fairy-legends
+          path: phase2_folklore_fairy_legends.json
+          retention-days: 1
+
+  mythology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      FRAME: mythology
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
