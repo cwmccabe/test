@@ -1,6 +1,6 @@
-import io,json,time,urllib.parse,urllib.request
+import json,time,urllib.parse,urllib.request
 from collections import defaultdict
-import pandas as pd
+from bs4 import BeautifulSoup
 import mwparserfromhell
 
 API='https://en.wikipedia.org/w/api.php'
@@ -19,6 +19,10 @@ def api(params,retries=6):
             if a+1==retries: raise
             time.sleep(min(30,2**a))
 
+def fetch_url(url):
+    req=urllib.request.Request(url,headers={'User-Agent':UA})
+    with urllib.request.urlopen(req,timeout=120) as r:return r.read()
+
 def category_members():
     items=[]; cont={}
     while True:
@@ -27,27 +31,28 @@ def category_members():
         if 'continue' not in d:return items
         cont=d['continue']
 
-def fetch_url(url):
-    req=urllib.request.Request(url,headers={'User-Agent':UA})
-    with urllib.request.urlopen(req,timeout=120) as r:return r.read()
-
 def parse_list_rows():
     url='https://en.wikipedia.org/wiki/'+LIST_PAGE.replace(' ','_')
-    html=fetch_url(url)
-    tables=pd.read_html(io.BytesIO(html))
-    rows=[]
-    for ti,t in enumerate(tables):
-        cols=[str(c).strip() for c in t.columns]
-        lower=[c.lower() for c in cols]
-        title_col=next((cols[i] for i,c in enumerate(lower) if 'title' in c or 'story'==c),None)
-        author_col=next((cols[i] for i,c in enumerate(lower) if 'author' in c or 'writer' in c),None)
-        year_col=next((cols[i] for i,c in enumerate(lower) if 'year' in c or 'date' in c),None)
-        if not title_col: continue
-        for ri,row in t.iterrows():
-            title=str(row.get(title_col,'')).strip()
-            if not title or title.lower() in {'nan','title','story'}: continue
-            rows.append({'table_index':ti,'row_index':int(ri),'listed_title':title,'author':str(row.get(author_col,'')).strip() if author_col else '', 'year':str(row.get(year_col,'')).strip() if year_col else ''})
-    return rows,tables
+    soup=BeautifulSoup(fetch_url(url),'html.parser')
+    rows=[]; table_count=0
+    for ti,table in enumerate(soup.select('table.wikitable')):
+        headers=[th.get_text(' ',strip=True).lower() for th in table.select('tr')[0].find_all(['th','td'])]
+        title_i=next((i for i,h in enumerate(headers) if 'title' in h or h=='story'),None)
+        author_i=next((i for i,h in enumerate(headers) if 'author' in h or 'writer' in h),None)
+        year_i=next((i for i,h in enumerate(headers) if 'year' in h or 'date' in h),None)
+        if title_i is None: continue
+        table_count+=1
+        for ri,tr in enumerate(table.select('tr')[1:]):
+            cells=tr.find_all(['td','th'])
+            if title_i>=len(cells): continue
+            cell=cells[title_i]
+            link=next((a for a in cell.find_all('a',href=True) if a['href'].startswith('/wiki/') and not a['href'].startswith('/wiki/File:')),None)
+            if not link: continue
+            listed_title=urllib.parse.unquote(link['href'].split('/wiki/',1)[1]).replace('_',' ')
+            author=cells[author_i].get_text(' ',strip=True) if author_i is not None and author_i<len(cells) else ''
+            year=cells[year_i].get_text(' ',strip=True) if year_i is not None and year_i<len(cells) else ''
+            rows.append({'table_index':ti,'row_index':ri,'listed_title':listed_title,'display_title':cell.get_text(' ',strip=True),'author':author,'year':year})
+    return rows,table_count
 
 def chunks(seq,n):
     for i in range(0,len(seq),n):yield seq[i:i+n]
@@ -67,10 +72,11 @@ def resolve_titles(titles):
                     old,new=item['from'],item['to']
                     for src,target in list(tmap.items()):
                         if target==old:tmap[src]=new
-            pages={p['title']:p for p in q['pages']}
+            pages={p.get('title',''):p for p in q.get('pages',[])}
             for listed in batch:
-                ct=tmap.get(listed,listed); p=pages.get(ct)
-                if not p or p.get('missing'): failures.append({'title':listed,'error':'missing'}); continue
+                p=pages.get(tmap.get(listed,listed))
+                if not p or p.get('missing') or 'pageid' not in p:
+                    failures.append({'title':listed,'error':'missing'}); continue
                 content=''; revs=p.get('revisions',[])
                 if revs:content=revs[0].get('slots',{}).get('main',{}).get('content','')
                 code=mwparserfromhell.parse(content); fields={}; infobox=''
@@ -81,29 +87,24 @@ def resolve_titles(titles):
                         for par in t.params:fields[clean(par.name).lower()]=clean(par.value)
                         break
                 resolved[listed]={'pageid':p['pageid'],'title':p['title'],'fullurl':p.get('fullurl',''),'extract':code.strip_code(normalize=True,collapse=True),'infobox_template':infobox,'infobox_fields':fields}
-        except Exception as e:
-            failures.append({'batch':batch,'error':repr(e)})
-        print('content batch',bi,flush=True);time.sleep(.05)
+        except Exception as e: failures.append({'batch':batch,'error':repr(e)})
+        if bi%10==0:print('content batch',bi,flush=True)
+        time.sleep(.05)
     return resolved,failures
 
 def main():
-    cats=category_members(); list_rows,tables=parse_list_rows()
+    cats=category_members(); list_rows,table_count=parse_list_rows()
     cat_titles=[x['title'] for x in cats]; list_titles=[x['listed_title'] for x in list_rows]
     resolved,failures=resolve_titles(cat_titles+list_titles)
-    by_pid=defaultdict(lambda:{'category_memberships':[],'list_rows':[],'listed_titles':[]})
-    pages={}
+    by_pid=defaultdict(lambda:{'category_memberships':[],'list_rows':[],'listed_titles':[]}); pages={}
     for x in cats:
         p=resolved.get(x['title'])
-        if not p:continue
-        pages[p['pageid']]=p; d=by_pid[p['pageid']]; d['category_memberships'].append(CATEGORY); d['listed_titles'].append(x['title'])
+        if p: pages[p['pageid']]=p; by_pid[p['pageid']]['category_memberships'].append(CATEGORY); by_pid[p['pageid']]['listed_titles'].append(x['title'])
     for x in list_rows:
         p=resolved.get(x['listed_title'])
-        if not p:continue
-        pages[p['pageid']]=p; d=by_pid[p['pageid']]; d['list_rows'].append(x); d['listed_titles'].append(x['listed_title'])
-    records=[]
-    for pid,prov in by_pid.items():
-        records.append({**pages[pid],'category_memberships':sorted(set(prov['category_memberships'])),'list_rows':prov['list_rows'],'listed_titles':sorted(set(prov['listed_titles']))})
-    payload={'crawl_timestamp_utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'category':CATEGORY,'list_page':LIST_PAGE,'category_memberships_total':len(cats),'list_rows_total':len(list_rows),'list_table_count':len(tables),'distinct_listed_titles':len(set(cat_titles+list_titles)),'distinct_canonical_pageids':len(records),'failures':failures,'records':sorted(records,key=lambda r:(r['title'].casefold(),r['pageid']))}
+        if p: pages[p['pageid']]=p; by_pid[p['pageid']]['list_rows'].append(x); by_pid[p['pageid']]['listed_titles'].append(x['listed_title'])
+    records=[{**pages[pid],'category_memberships':sorted(set(prov['category_memberships'])),'list_rows':prov['list_rows'],'listed_titles':sorted(set(prov['listed_titles']))} for pid,prov in by_pid.items()]
+    payload={'crawl_timestamp_utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'category':CATEGORY,'list_page':LIST_PAGE,'category_memberships_total':len(cats),'list_rows_total':len(list_rows),'list_table_count':table_count,'distinct_listed_titles':len(set(cat_titles+list_titles)),'distinct_canonical_pageids':len(records),'failures':failures,'records':sorted(records,key=lambda r:(r['title'].casefold(),r['pageid']))}
     with open(OUT,'w',encoding='utf-8') as f:json.dump(payload,f,ensure_ascii=False)
     print(json.dumps({k:payload[k] for k in ['category_memberships_total','list_rows_total','list_table_count','distinct_listed_titles','distinct_canonical_pageids','failures']},ensure_ascii=False))
 if __name__=='__main__':main()
