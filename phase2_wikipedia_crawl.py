@@ -41,3 +41,4 @@ def main():
     with open('phase2_candidate_metadata.json','w',encoding='utf-8') as f: json.dump({'records':out,'failures':failures},f,ensure_ascii=False)
     print(json.dumps({'records':len(out),'failures':failures}))
 if __name__=='__main__':main()
+# trigger after base-workflow output path update
